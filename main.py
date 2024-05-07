@@ -10,7 +10,7 @@ from torchvision.transforms import ToTensor, Lambda
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda:0" if use_cuda else "cpu")
 print(device)
-torch.backends.cudnn.benchmark = True
+
 
 #defining a transformer for our training dataset to randomise
 #rotations, aspect ratios etc of the image, so the model isnt thrown off by these aspects
@@ -51,7 +51,7 @@ test_loader = torch.utils.data.DataLoader(test_data, batch_size=batch_size, shuf
 
 #implementing the NN given in the lecture (this will be changed to a convelutional neural network later)
 
-class network(nn.Module):
+class network_old(nn.Module):
     def __init__(self, in_feature, hidden_layers, out_features):
         super().__init__()
         if len(hidden_layers) < 1:
@@ -78,8 +78,31 @@ class network(nn.Module):
         x = self.out(x).to(device)
         return x
 
+#implementing a CNN
+class Cnetwork(nn.Module):
+    def __init__(self, in_channels = 3, out_features=102, size = 224):
+        super().__init__()
+        self.out_features = out_features
+        self.stack = nn.Sequential(
+            # "same" convolution layer (ie input feat = output feat)
+            nn.Conv2d(in_channels=3, out_channels=64, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=(2,2), stride=(2,2)), #reduces the size of the image by half
+            nn.Conv2d(in_channels=64, out_channels=16, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=(2,2), stride=(2,2)),
+            
+        )
+        
+    def forward(self, x):
+        x = self.stack(x)
+        x.reshape(x.size(0), -1)
+        x = nn.Linear(14336, self.out_features)(x)
+        return x
 
-classifier = network(in_feature=size*size*3, hidden_layers=[2048, 1024, 1024, 512], out_features=102).to(device)
+
+#classifier = network_old(in_feature=size*size*3, hidden_layers=[2048, 512], out_features=102).to(device)
+classifier = Cnetwork().to(device)
 loss_func = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(classifier.parameters(), lr=0.001)
 
@@ -90,8 +113,9 @@ def train(loader, model=classifier, loss_func = loss_func, optimizer = optimizer
     print('asdasdaasdd asasd'+str(next(model.parameters()).is_cuda))
     size = len(loader.dataset)
     for batch, (X, y) in enumerate(loader):
+       
         X, y = X.to(device), y.to(device)
-        print(X.is_cuda)
+        
         pred = model(X)
         loss = loss_func(pred, y)
 
@@ -99,7 +123,7 @@ def train(loader, model=classifier, loss_func = loss_func, optimizer = optimizer
         optimizer.step()
         optimizer.zero_grad()
         
-        if batch % 80:
+        if batch % 80 == 0:
             loss, current = loss.item(), (batch + 1) * len(X)
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
