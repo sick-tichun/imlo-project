@@ -10,7 +10,7 @@ from torchvision.transforms import ToTensor, Lambda
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda:0" if use_cuda else "cpu")
 print(device)
-torch.cuda.empty_cache()
+
 
 #defining a transformer for our training dataset to randomise
 #rotations, aspect ratios etc of the image, so the model isnt thrown off by these aspects
@@ -20,14 +20,14 @@ t_transform = transforms.Compose([
     transforms.RandomResizedCrop(size=size), #resizes/crops image
     transforms.RandomHorizontalFlip(), #flips
     transforms.RandomVerticalFlip(),
-    transforms.ToTensor(),
-    transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)) #squishes data into a range wich is vital to a CNN network to performing
- ])
+    transforms.ToTensor(), 
+    transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)) #squishes data into a range wich is vital to a CNN network to performing 
+ ]) 
 v_transfrom = transforms.Compose([
     transforms.Resize(256),
     transforms.CenterCrop(size),
     transforms.ToTensor(),
-    transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+    transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)) 
 ])
 test_transform = transforms.Compose([
     transforms.Resize(256),
@@ -43,7 +43,7 @@ train_data = datasets.Flowers102(root='data/train',download=True, split='train',
 valid_data = datasets.Flowers102(root='data/valid',download=True, split='val', transform=v_transfrom)
 test_data = datasets.Flowers102(root='data/test',download=True, split='test', transform=test_transform)
 
-batch_size = 8
+batch_size = 16
 
 train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=0)
 valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, num_workers=0)
@@ -57,7 +57,7 @@ class network_old(nn.Module):
         if len(hidden_layers) < 1:
             raise Exception("gotta have more than 1 hidden layer")
         self.flatten = nn.Flatten()
-
+        
         self.layers = []
         self.layers.append(nn.Linear(in_feature, hidden_layers[0]))
         self.add_module('input layer', self.layers[0])
@@ -86,64 +86,49 @@ class Cnetwork(nn.Module):
         self.stack = nn.Sequential(
             # "same" convolution layer (ie input feat = output feat)
             nn.Conv2d(in_channels=3, out_channels=64, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
+            nn.ReLU(inplace=True),
             #reduces the size of the image by half
+            nn.MaxPool2d(kernel_size=(2,2), stride=(2,2)), 
+            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
+            nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=(2,2), stride=(2,2)),
-            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
-            nn.BatchNorm2d(512),
-            #nn.ReLU(),
-            #nn.MaxPool2d(kernel_size=(2,2), stride=(2,2)),
-            #nn.Conv2d(in_channels=512, out_channels=512, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
-            #nn.BatchNorm2d(512),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=512, out_channels=256, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=(2,2), stride=(2,2)),
-            nn.Conv2d(in_channels=256, out_channels=128, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
-            nn.BatchNorm2d(128),
-            nn.ReLU()
         )
         self.fully_con = nn.Sequential(
-            nn.Linear(401408, 512),
-            nn.ReLU(),
-            nn.Linear(512, self.out_features)
+            nn.Linear(14336, self.out_features)
         )
-
+        
     def forward(self, x):
         x = self.stack(x)
-        x = x.reshape(x.shape[0], -1)
+        x.reshape(x.size(0), -1).to(device)
         x = self.fully_con(x)
         return x
 
 
 #classifier = network_old(in_feature=size*size*3, hidden_layers=[2048, 512], out_features=102).to(device)
-classifier = Cnetwork().to(device)
+classifier = torch.load('model.pth')
 loss_func = nn.CrossEntropyLoss()
-optimizer = torch.optim.SGD(classifier.parameters(), lr=0.001)
+optimizer = torch.optim.Adam(classifier.parameters(), lr=0.001)
 
-epochs = 20
+epochs = 10
 
 def train(loader, model=classifier, loss_func = loss_func, optimizer = optimizer):
     model.train()
+    print('asdasdaasdd asasd'+str(next(model.parameters()).is_cuda))
     size = len(loader.dataset)
     for batch, (X, y) in enumerate(loader):
-
+       
         X, y = X.to(device), y.to(device)
         pred = model(X)
         loss = loss_func(pred, y)
 
-        optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-
+        optimizer.zero_grad()
+        
         if batch % 80 == 0:
             loss, current = loss.item(), (batch + 1) * len(X)
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
@@ -170,7 +155,7 @@ for i in range(epochs):
     train(train_loader, classifier)
     test(valid_loader, classifier, loss_func)
     if i % 2 == 0 and i != 0:
-      torch.save(classifier.state_dict(), 'modeltemp.pth')
+      torch.save(classifier.state_dict(), 'modeltemp.pth')   
 print("Done!")
 test(test_loader, classifier, loss_func)
 torch.save(classifier.state_dict(), 'model.pth')
