@@ -7,19 +7,23 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.transforms import ToTensor, Lambda
 
+
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda:0" if use_cuda else "cpu")
 print(device)
 torch.cuda.empty_cache()
 
+
+
 #defining a transformer for our training dataset to randomise
 #rotations, aspect ratios etc of the image, so the model isnt thrown off by these aspects
 size = 224
 t_transform = transforms.Compose([
-    transforms.RandomRotation(30), #rotates the images randomly
+    #transforms.RandomRotation(30), #rotates the images randomly
     transforms.RandomResizedCrop(size=size), #resizes/crops image
-    transforms.RandomHorizontalFlip(), #flips
-    transforms.RandomVerticalFlip(),
+    #transforms.RandomHorizontalFlip(), #flips
+    #transforms.RandomVerticalFlip(),
+    #transforms.Resize(size),
     transforms.ToTensor(),
     transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)) #squishes data into a range wich is vital to a CNN network to performing
  ])
@@ -43,7 +47,7 @@ train_data = datasets.Flowers102(root='data/train',download=True, split='train',
 valid_data = datasets.Flowers102(root='data/valid',download=True, split='val', transform=v_transfrom)
 test_data = datasets.Flowers102(root='data/test',download=True, split='test', transform=test_transform)
 
-batch_size = 8
+batch_size = 16
 
 train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=0)
 valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, num_workers=0)
@@ -88,7 +92,14 @@ class Cnetwork(nn.Module):
             nn.Conv2d(in_channels=3, out_channels=64, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
             nn.BatchNorm2d(64),
             nn.ReLU(),
+            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=(2,2), stride=(2,2)),
             nn.Conv2d(in_channels=64, out_channels=128, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
             nn.BatchNorm2d(128),
             nn.ReLU(),
             #reduces the size of the image by half
@@ -96,25 +107,24 @@ class Cnetwork(nn.Module):
             nn.Conv2d(in_channels=128, out_channels=256, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
             nn.BatchNorm2d(256),
             nn.ReLU(),
-            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
-            nn.BatchNorm2d(512),
-            #nn.ReLU(),
-            #nn.MaxPool2d(kernel_size=(2,2), stride=(2,2)),
-            #nn.Conv2d(in_channels=512, out_channels=512, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
-            #nn.BatchNorm2d(512),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
+            nn.BatchNorm2d(256),
             nn.ReLU(),
-            nn.Conv2d(in_channels=512, out_channels=256, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
             nn.BatchNorm2d(256),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=(2,2), stride=(2,2)),
-            nn.Conv2d(in_channels=256, out_channels=128, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
-            nn.BatchNorm2d(128),
-            nn.ReLU()
+            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
+            nn.BatchNorm2d(512),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=(2,2), stride=(2,2))
         )
         self.fully_con = nn.Sequential(
-            nn.Linear(401408, 512),
+            nn.Linear(100352, 1024),
             nn.ReLU(),
-            nn.Linear(512, self.out_features)
+            nn.Linear(1024, 1024),
+            nn.ReLU(),
+            nn.Linear(1024, self.out_features)
         )
 
     def forward(self, x):
@@ -125,11 +135,11 @@ class Cnetwork(nn.Module):
 
 
 #classifier = network_old(in_feature=size*size*3, hidden_layers=[2048, 512], out_features=102).to(device)
-classifier = Cnetwork().to(device)
+classifier = Cnetwork(size=size).to(device)
 loss_func = nn.CrossEntropyLoss()
 optimizer = torch.optim.SGD(classifier.parameters(), lr=0.001)
 
-epochs = 20
+epochs = 70
 
 def train(loader, model=classifier, loss_func = loss_func, optimizer = optimizer):
     model.train()
@@ -171,6 +181,8 @@ for i in range(epochs):
     test(valid_loader, classifier, loss_func)
     if i % 2 == 0 and i != 0:
       torch.save(classifier.state_dict(), 'modeltemp.pth')
+    torch.cuda.empty_cache() # free up gpu cache every epoch to make space for more convolutions
+
 print("Done!")
 test(test_loader, classifier, loss_func)
 torch.save(classifier.state_dict(), 'model.pth')
