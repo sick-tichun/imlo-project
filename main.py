@@ -19,7 +19,7 @@ torch.cuda.empty_cache()
 #rotations, aspect ratios etc of the image, so the model isnt thrown off by these aspects
 size = 224
 t_transform = transforms.Compose([
-    #transforms.RandomRotation(30), #rotates the images randomly
+    transforms.RandomRotation(30), #rotates the images randomly
     transforms.RandomResizedCrop(size=size), #resizes/crops image
     #transforms.RandomHorizontalFlip(), #flips
     #transforms.RandomVerticalFlip(),
@@ -117,14 +117,19 @@ class Cnetwork(nn.Module):
             nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
             nn.BatchNorm2d(512),
             nn.ReLU(),
+            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=(3,3), stride=(1,1), padding=(1,1)),
+            nn.BatchNorm2d(512),
+            nn.ReLU(),
             nn.MaxPool2d(kernel_size=(2,2), stride=(2,2))
         )
         self.fully_con = nn.Sequential(
-            nn.Linear(100352, 1024),
+            nn.Linear(100352, 4096),
             nn.ReLU(),
-            nn.Linear(1024, 1024),
+            nn.Dropout(0.5),
+            nn.Linear(4096, 4096),
             nn.ReLU(),
-            nn.Linear(1024, self.out_features)
+            nn.Dropout(0.4),
+            nn.Linear(4096, self.out_features)
         )
 
     def forward(self, x):
