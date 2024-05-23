@@ -49,9 +49,9 @@ test_data = datasets.Flowers102(root='data/test',download=True, split='test', tr
 
 batch_size = 16
 
-train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=0)
-valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, num_workers=0)
-test_loader = torch.utils.data.DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=0)
+train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=8)
+valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, num_workers=8)
+test_loader = torch.utils.data.DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=8)
 
 #implementing the NN given in the lecture (this will be changed to a convelutional neural network later)
 
@@ -123,13 +123,13 @@ class Cnetwork(nn.Module):
             nn.MaxPool2d(kernel_size=(2,2), stride=(2,2))
         )
         self.fully_con = nn.Sequential(
-            nn.Linear(100352, 4096),
+            nn.Linear(100352, 2048),
             nn.ReLU(),
             nn.Dropout(0.5),
-            nn.Linear(4096, 4096),
+            nn.Linear(2048, 2048),
             nn.ReLU(),
-            nn.Dropout(0.4),
-            nn.Linear(4096, self.out_features)
+            nn.Dropout(0.3),
+            nn.Linear(2048, self.out_features)
         )
 
     def forward(self, x):
@@ -142,9 +142,9 @@ class Cnetwork(nn.Module):
 #classifier = network_old(in_feature=size*size*3, hidden_layers=[2048, 512], out_features=102).to(device)
 classifier = Cnetwork(size=size).to(device)
 loss_func = nn.CrossEntropyLoss()
-optimizer = torch.optim.SGD(classifier.parameters(), lr=0.001)
+optimizer = torch.optim.SGD(classifier.parameters(), lr=0.001, weight_decay=0.001)
 
-epochs = 70
+epochs = 150
 
 def train(loader, model=classifier, loss_func = loss_func, optimizer = optimizer):
     model.train()
