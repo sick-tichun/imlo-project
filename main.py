@@ -20,9 +20,10 @@ torch.cuda.empty_cache()
 size = 224
 t_transform = transforms.Compose([
     transforms.RandomRotation(30), #rotates the images randomly
-    transforms.RandomResizedCrop(size=size), #resizes/crops image
+    transforms.RandomResizedCrop(size=size), #crops image
     #transforms.RandomHorizontalFlip(), #flips
     #transforms.RandomVerticalFlip(),
+    #transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2), #adjusts brightness, contrast, saturation, and hue randomly,
     #transforms.Resize(size),
     transforms.ToTensor(),
     transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)) #squishes data into a range wich is vital to a CNN network to performing
@@ -142,9 +143,9 @@ class Cnetwork(nn.Module):
 #classifier = network_old(in_feature=size*size*3, hidden_layers=[2048, 512], out_features=102).to(device)
 classifier = Cnetwork(size=size).to(device)
 loss_func = nn.CrossEntropyLoss()
-optimizer = torch.optim.SGD(classifier.parameters(), lr=0.001, weight_decay=0.001)
+optimizer = torch.optim.SGD(classifier.parameters(), lr=0.001, weight_decay=0.005)
 
-epochs = 150
+epochs = 70
 
 def train(loader, model=classifier, loss_func = loss_func, optimizer = optimizer):
     model.train()
@@ -159,7 +160,7 @@ def train(loader, model=classifier, loss_func = loss_func, optimizer = optimizer
         loss.backward()
         optimizer.step()
 
-        if batch % 80 == 0:
+        if batch % 10 == 0:
             loss, current = loss.item(), (batch + 1) * len(X)
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
