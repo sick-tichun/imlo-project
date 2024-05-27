@@ -145,7 +145,7 @@ classifier = Cnetwork(size=size).to(device)
 loss_func = nn.CrossEntropyLoss()
 optimizer = torch.optim.SGD(classifier.parameters(), lr=0.001, weight_decay=0.005)
 
-epochs = 70
+epochs = 600
 
 def train(loader, model=classifier, loss_func = loss_func, optimizer = optimizer):
     model.train()
